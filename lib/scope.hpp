@@ -41,6 +41,13 @@ enum ScopeMode {
 };
 #define SCOPE_MODE_COUNT 4
 
+// Max value of the timebase knob (param1) for the time-domain modes. The slowest
+// setting decimates by 1<<(TIMEBASE_MAX-1) input samples per stored pixel, i.e.
+// a ~2^(TIMEBASE_MAX-1) longer window than the fastest setting — enough to fit
+// many LFO cycles on screen. Spectrum mode reuses param1 as HF emphasis and is
+// kept at 8 (see ScopeParam1Max).
+#define TIMEBASE_MAX 14
+
 // ── Mutable state (registered in engine_state.def for the VCV context-swap) ──
 int menuMode = MODE_LFO;    // current scope mode (1..4)
 int oldMenuMode = MODE_LFO; // previous mode (detects mode change)
@@ -80,10 +87,17 @@ static inline char ScopeMapSample(int adc) {
     return (char)constrain(v, -120, 120);
 }
 
-// Timebase decimation: knob 1..8 -> keep 1 sample every 1,2,4,…128 (exp/div).
+// Timebase decimation: knob 1..TIMEBASE_MAX -> keep 1 sample every 1,2,4,…
+// (exponential/div). Higher = slower sweep = more waveforms across the screen.
 static inline int ScopeTimebaseDecim(int p) {
-    p = constrain(p, 1, 8);
+    p = constrain(p, 1, TIMEBASE_MAX);
     return 1 << (p - 1);
+}
+
+// Max for the param1 knob in the current mode: the extended timebase range for
+// the time-domain modes, but only 1..8 in Spectrum (there param1 is HF emphasis).
+static inline int ScopeParam1Max() {
+    return (menuMode == MODE_SPECTRUM) ? 8 : TIMEBASE_MAX;
 }
 
 // Vertical placement: center + scaled sample (positive sample = up on screen).
@@ -304,8 +318,8 @@ void ScopeRender(Adafruit_SSD1306 &display) {
     if (menuMode == MODE_LFO) {
         // Two stacked traces; param2 nudges them apart/together.
         int off = (param2 - 4) * 2;
-        ScopeDrawTrace(display, cv0, 16 - off, scale);
-        ScopeDrawTrace(display, cv1, 48 + off, scale);
+        ScopeDrawTrace(display, cv0, SCREEN_HEIGHT / 2 - off, scale);
+        ScopeDrawTrace(display, cv1, SCREEN_HEIGHT / 2 + off, scale);
     } else {
         // WAVE + SHOT: single centred trace.
         ScopeDrawTrace(display, cv0, SCREEN_HEIGHT / 2, scale);

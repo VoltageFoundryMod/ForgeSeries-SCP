@@ -62,6 +62,18 @@ int main() {
     CHECK(param1(a) == 7, "A param1 set to 7");
     CHECK(param1(b) != 7, "B param1 not affected by A");
 
+    // ── Extended timebase range (time modes reach 14; spectrum stays 8) ──────
+    setMode(b, 1); // LFO
+    setParam1(b, 14);
+    CHECK(param1(b) == 14, "LFO timebase reaches extended max (14)");
+    CHECK(param1Max(b) == 14, "param1Max is 14 in a time-domain mode");
+    // A is in Spectrum (set above): param1 must stay clamped to 8.
+    CHECK(param1Max(a) == 8, "param1Max is 8 in Spectrum mode");
+    setParam1(a, 14);
+    CHECK(param1(a) == 8, "Spectrum param1 clamps to 8 (HF-emphasis reuse)");
+    setParam1(a, 7);  // restore
+    setParam1(b, 2);  // fast timebase so the render smoke test below fills a trace
+
     // ── Render smoke test: B (LFO) should draw grid + trace ──────────────────
     feedSine(b, 400);
     uint8_t fbB[1024];
