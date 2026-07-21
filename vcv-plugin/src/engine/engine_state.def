@@ -1,0 +1,43 @@
+// engine_state.def — THE registry of per-instance ForgeView scope state.
+//
+// Every mutable file-scope global in lib/scope.hpp is listed here exactly once.
+// The list is expanded by fw_engine.cpp to (a) declare the EngineState mirror
+// struct, (b) swap globals<->state, and (c) copy globals->state.  Adding a scope
+// global means adding ONE line here.
+//
+// Macros (defined by the includer; all #undef'd afterwards):
+//   CF_SCALAR(type, name)        a scalar global.
+//   CF_ARRAY(type, name, count)  a C array global.
+//
+// The scope carries no default-constructed objects or Strings, so unlike
+// ClockForge there is no CF_OBJECT here.
+
+// ── Menu / mode state ────────────────────────────────────────────────────────
+CF_SCALAR(int,   menuMode)
+CF_SCALAR(int,   oldMenuMode)
+CF_SCALAR(int,   param)
+CF_SCALAR(int,   param_select)
+CF_SCALAR(int,   param1)
+CF_SCALAR(int,   param2)
+CF_SCALAR(float, scale)
+
+// ── Encoder / overlay ────────────────────────────────────────────────────────
+CF_SCALAR(bool,          switchState)
+CF_SCALAR(bool,          oldSwitchState)
+CF_SCALAR(unsigned long, hideTimer)
+CF_SCALAR(bool,          overlayOn)
+
+// ── Acquisition ──────────────────────────────────────────────────────────────
+CF_SCALAR(bool, trig)
+CF_SCALAR(bool, old_trig)
+CF_SCALAR(int,  rfrs)
+CF_SCALAR(int,  _decimCount)
+CF_SCALAR(bool, _shotCapturing)
+CF_SCALAR(int,  _shotIdx)
+CF_SCALAR(int,  _capIdx)
+
+// ── Trace + spectrum buffers ─────────────────────────────────────────────────
+CF_ARRAY(char,          cv0,    128)
+CF_ARRAY(char,          cv1,    128)
+CF_ARRAY(char,          fftCap, 128)
+CF_ARRAY(unsigned char, spec,   64)
