@@ -44,7 +44,7 @@ struct ForgeView : forgevcv::ForgeModule {
         configOutput(OUT2_OUTPUT, "CV 2 through");
         configOutput(OUT3_OUTPUT, "CV 1 through");
         configOutput(OUT4_OUTPUT, "CV 2 through");
-        cvRange = CV_BIPOLAR; // scopes usually watch bipolar signals
+        cvRange = CV_UNIPOLAR; // Use the 0–5V range by default (matches the hardware's input scaling). User can change it in the context menu.
         fv = fvengine::createEngine();
     }
 

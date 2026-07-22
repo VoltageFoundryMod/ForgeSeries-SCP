@@ -37,16 +37,16 @@ static const int8_t Sinewave[N_WAVE - N_WAVE / 4] = {
 };
 
 // Fixed-point multiplication & scaling (result stays 8-bit).
-static inline char FIX_MPY(char a, char b) {
+static inline int8_t FIX_MPY(int8_t a, int8_t b) {
     int c = ((int)a * (int)b) >> 6;
     b = c & 0x01;
     a = (c >> 1) + b;
     return a;
 }
 
-int fix_fft(char fr[], char fi[], int m, int inverse) {
+int fix_fft(int8_t fr[], int8_t fi[], int m, int inverse) {
     int mr, nn, i, j, l, k, istep, n, scale, shift;
-    char qr, qi, tr, ti, wr, wi;
+    int8_t qr, qi, tr, ti, wr, wi;
 
     n = 1 << m;
     if (n > N_WAVE)
@@ -132,9 +132,9 @@ int fix_fft(char fr[], char fi[], int m, int inverse) {
     return scale;
 }
 
-int fix_fftr(char f[], int m, int inverse) {
+int fix_fftr(int8_t f[], int m, int inverse) {
     int i, N = 1 << (m - 1), scale = 0;
-    char tt, *fr = f, *fi = &f[N];
+    int8_t tt, *fr = f, *fi = &f[N];
 
     if (inverse)
         scale = fix_fft(fi, fr, m - 1, inverse);

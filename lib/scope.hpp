@@ -144,10 +144,12 @@ float scopeInputSpanV = 5.0f;
 
 // Trace buffers: index 0 = oldest, 127 = newest (shift register).
 // Values are signed "screen units": ADC midscale (2048) -> 0, ±2048 -> ±64.
-char cv0[SCREEN_WIDTH] = {0}; // channel 1 trace
-char cv1[SCREEN_WIDTH] = {0}; // channel 2 trace (LFO / X-Y mode)
+// int8_t, not plain char: char is unsigned on the RP2040's ARM compiler, so
+// storing negative screen units in char breaks on hardware (works only on x86).
+int8_t cv0[SCREEN_WIDTH] = {0}; // channel 1 trace
+int8_t cv1[SCREEN_WIDTH] = {0}; // channel 2 trace (LFO / X-Y mode)
 
-char fftCap[SCREEN_WIDTH] = {0};            // spectrum: rolling capture buffer
+int8_t fftCap[SCREEN_WIDTH] = {0};          // spectrum: rolling capture buffer
 unsigned char spec[SCREEN_WIDTH / 2] = {0}; // spectrum: last computed magnitudes (64 bins)
 int specPeakBin = 0;                        // spectrum: bin index of the tallest peak (0 = none)
 
@@ -156,14 +158,14 @@ int xyPersist = 3;    // persistence level index (see kXYPersistNames; 3 = 0.5s)
 int xyHead = 0;       // next write position in the ring
 int xyCount = 0;      // valid points currently in the ring
 int xyDecimCount = 0; // capture-decimation counter
-char xyx[XY_RING] = {0};
-char xyy[XY_RING] = {0};
+int8_t xyx[XY_RING] = {0};
+int8_t xyy[XY_RING] = {0};
 
 // ── Small helpers ────────────────────────────────────────────────────────────
 // Map a 0..4095 ADC reading to a signed screen unit (-64..+63 at full scale).
-static inline char ScopeMapSample(int adc) {
+static inline int8_t ScopeMapSample(int adc) {
     int v = (adc - 2048) >> 5; // ±2048 -> ±64
-    return (char)constrain(v, -120, 120);
+    return (int8_t)constrain(v, -120, 120);
 }
 
 // Timebase decimation: knob 1..TIMEBASE_MAX -> keep 1 sample every 1,2,4,…
@@ -180,7 +182,7 @@ static inline int ScopeParam1Max() {
 }
 
 // Vertical placement: center + scaled sample (positive sample = up on screen).
-static inline int ScopeY(int center, char s, float sc) {
+static inline int ScopeY(int center, int8_t s, float sc) {
     int y = center - (int)((float)s * sc * 0.5f);
     return constrain(y, 0, SCREEN_HEIGHT - 1);
 }
@@ -506,13 +508,20 @@ void ScopeFeedSample(int ch1adc, int ch2adc, bool clkHigh) {
     if (menuMode == MODE_SPECTRUM) {
         // Sample as fast as possible for maximum bandwidth; run the FFT when the
         // 128-sample window is full.
-        fftCap[_capIdx++] = (char)constrain((ch1adc - 2048) >> 4, -127, 127);
+        fftCap[_capIdx++] = (int8_t)constrain((ch1adc - 2048) >> 4, -127, 127);
         if (_capIdx >= SCREEN_WIDTH) {
             _capIdx = 0;
-            char data[SCREEN_WIDTH];
-            char im[SCREEN_WIDTH];
+            int8_t data[SCREEN_WIDTH];
+            int8_t im[SCREEN_WIDTH];
+            // Subtract the window mean before the FFT: hardware inputs never
+            // idle exactly at ADC midscale, and the residual DC otherwise pins
+            // the bin-0 bar at full height no matter what signal is patched.
+            int mean = 0;
+            for (int i = 0; i < SCREEN_WIDTH; i++)
+                mean += fftCap[i];
+            mean /= SCREEN_WIDTH;
             for (int i = 0; i < SCREEN_WIDTH; i++) {
-                data[i] = fftCap[i];
+                data[i] = (int8_t)constrain(fftCap[i] - mean, -128, 127);
                 im[i] = 0;
             }
             fix_fft(data, im, 7, 0); // 2^7 = 128-point FFT
@@ -596,8 +605,8 @@ void ScopeFeedSample(int ch1adc, int ch2adc, bool clkHigh) {
     if (++_decimCount < ScopeTimebaseDecim(param1))
         return;
     _decimCount = 0;
-    char s0 = ScopeMapSample(ch1adc);
-    char s1 = ScopeMapSample(ch2adc);
+    int8_t s0 = ScopeMapSample(ch1adc);
+    int8_t s1 = ScopeMapSample(ch2adc);
     for (int i = 0; i < SCREEN_WIDTH - 1; i++) {
         cv0[i] = cv0[i + 1];
         cv1[i] = cv1[i + 1];
@@ -616,7 +625,7 @@ static void ScopeDrawGrid(Adafruit_SSD1306 &display) {
     DrawHDashedLine(display, 0, SCREEN_HEIGHT - 1, SCREEN_WIDTH, WHITE);
 }
 
-static void ScopeDrawTrace(Adafruit_SSD1306 &display, const char *buf, int center, float sc) {
+static void ScopeDrawTrace(Adafruit_SSD1306 &display, const int8_t *buf, int center, float sc) {
     for (int i = 0; i < SCREEN_WIDTH - 1; i++) {
         display.drawLine(i, ScopeY(center, buf[i], sc),
                          i + 1, ScopeY(center, buf[i + 1], sc), WHITE);
@@ -633,7 +642,7 @@ static void ScopeDrawUnits(Adafruit_SSD1306 &display, bool withTime) {
     // Vertical: a 16px grid division covers 1024/scale ADC counts.
     float vdiv = (1024.0f / scale) * (scopeInputSpanV / 4095.0f);
     if (vdiv >= 1.0f)
-        snprintf(b, sizeof(b), "%.1fV", (double)vdiv);
+        snprintf(b, sizeof(b), "%.2fV", (double)vdiv);
     else
         snprintf(b, sizeof(b), "%dmV", (int)(vdiv * 1000.0f + 0.5f));
     display.setCursor(1, SCREEN_HEIGHT - 8);

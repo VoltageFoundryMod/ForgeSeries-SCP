@@ -110,8 +110,8 @@ int main() {
     setMode(d, 5);      // X-Y
     setXyPersist(d, 0); // "Live" -> full-rate capture, dense scatter
     CHECK(mode(d) == 5, "engine D switched to X-Y");
-    CHECK(xyPersistCount() == 10 && xyPersistName(3) == "0.5s" && xyPersistName(9) == "60s",
-          "persistence presets named (up to 60s)");
+    CHECK(xyPersistCount() == 13 && xyPersistName(3) == "0.5s" && xyPersistName(12) == "5m",
+          "persistence presets named (up to 5m)");
     for (int i = 0; i < 400; i++) {
         float ph = (float)i / 32.0f * 2.0f * 3.14159265f;
         feedSample(d, 2.0f / 44100.0f, 2.5f + 2.0f * std::sin(ph),

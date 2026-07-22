@@ -10,6 +10,7 @@
 
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
+#include <EEPROM.h> // here (not just settings.hpp) so PlatformIO's LDF finds it
 #include <Wire.h>
 
 #define OLED_ADDRESS 0x3C
@@ -20,6 +21,7 @@
 #include "encoder.hpp"
 #include "pinouts.hpp"
 #include "scope.hpp"
+#include "settings.hpp" // after scope.hpp: persists its globals to EEPROM
 #include "splash.hpp"
 #include "version.hpp"
 
@@ -33,6 +35,12 @@ long newPosition = 0;
 
 // Core 1 renders when this is set by Core 0's interaction, but the scope always
 // wants fresh frames, so Core 1 just renders continuously (see loop1).
+
+// Core 1 starts running in parallel with Core 0's setup() on this Arduino core,
+// but display.begin() (framebuffer allocation) and the splash/version screens
+// happen inside setup() — rendering before it finishes crashes the boot or
+// wipes the splash. Core 1 idles until Core 0 raises this flag.
+static volatile bool g_setupDone = false;
 
 void HandleEncoder() {
     // Button (active-low with pull-up)
@@ -63,6 +71,7 @@ void setup() {
     InitWire();
     InitIO();
     ScopeInit();
+    ScopeSettingsInit(); // restore saved mode/params over the defaults
 
     // Display first, so hardware errors can be shown on screen.
     if (!display.begin(SSD1306_SWITCHCAPVCC, OLED_ADDRESS)) {
@@ -100,6 +109,7 @@ void setup() {
     delay(1200);
 
     Serial.println("Initialization complete.");
+    g_setupDone = true; // release Core 1's render loop
 }
 
 // Core 0: encoder + high-rate ADC sampling + DAC pass-through.
@@ -113,10 +123,15 @@ void loop() {
 
     // Buffered oscilloscope through: CV1 -> Out1/Out3, CV2 -> Out2/Out4.
     DACWriteAll((uint16_t)ch1, (uint16_t)ch2, (uint16_t)ch1, (uint16_t)ch2);
+
+    ScopeSettingsPoll(); // debounced EEPROM save (5 s after the last change)
 }
 
 // Core 1: render the current mode + flush over the display bus.
-void setup1() {}
+void setup1() {
+    while (!g_setupDone)
+        delay(1);
+}
 
 void loop1() {
     ScopeRender(display);

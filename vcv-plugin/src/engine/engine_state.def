@@ -60,9 +60,9 @@ CF_SCALAR(unsigned long, lastFeedUs)
 CF_SCALAR(float,         feedIntervalUs)
 
 // ── Trace + spectrum buffers ─────────────────────────────────────────────────
-CF_ARRAY(char,          cv0,    128)
-CF_ARRAY(char,          cv1,    128)
-CF_ARRAY(char,          fftCap, 128)
+CF_ARRAY(int8_t,        cv0,    128)
+CF_ARRAY(int8_t,        cv1,    128)
+CF_ARRAY(int8_t,        fftCap, 128)
 CF_ARRAY(unsigned char, spec,   64)
 
 // ── X-Y persistence ring ─────────────────────────────────────────────────────
@@ -70,5 +70,5 @@ CF_SCALAR(int,  xyPersist)
 CF_SCALAR(int,  xyHead)
 CF_SCALAR(int,  xyCount)
 CF_SCALAR(int,  xyDecimCount)
-CF_ARRAY(char,  xyx, 256)
-CF_ARRAY(char,  xyy, 256)
+CF_ARRAY(int8_t, xyx, 256)
+CF_ARRAY(int8_t, xyy, 256)
