@@ -148,7 +148,7 @@ struct ForgeViewWidget : ModuleWidget {
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, 0)));
         addChild(createWidget<ScrewBlack>(Vec(RACK_GRID_WIDTH, RACK_GRID_HEIGHT - RACK_GRID_WIDTH)));
 
-        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(14.989, 66.795)), module, ForgeView::CLKIN_INPUT));
+        addInput(createInputCentered<PJ301MPort>(mm2px(Vec(15.2405, 66.795)), module, ForgeView::CLKIN_INPUT));
         addInput(createInputCentered<PJ301MPort>(mm2px(Vec(7.153, 80.797)), module, ForgeView::CV1IN_INPUT));
         addInput(createInputCentered<PJ301MPort>(mm2px(Vec(22.647, 80.797)), module, ForgeView::CV2IN_INPUT));
 
@@ -168,7 +168,7 @@ struct ForgeViewWidget : ModuleWidget {
         forgevcv::EncoderKnob *enc = new forgevcv::EncoderKnob();
         enc->module = module;
         enc->box.size = mm2px(Vec(9.0, 9.0));
-        enc->box.pos = mm2px(Vec(14.924, 50.918)).minus(enc->box.size.div(2));
+        enc->box.pos = mm2px(Vec(15.24, 50.918)).minus(enc->box.size.div(2));
         addChild(enc);
         encoder = enc;
     }
