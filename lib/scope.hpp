@@ -129,7 +129,9 @@ int _capIdx = 0;             // spectrum mode: next FFT capture index
 int tunerChan = 1;             // input channel measured by the tuner (1 or 2)
 float tunerHz = 0.0f;          // smoothed detected frequency (0 = no signal)
 float tunerAmp = 0.0f;         // tracked signal amplitude (ADC counts, envelope)
-int tunerPrevSign = 0;         // last hysteresis sign for crossing detection
+int tunerPrevSign = 0;         // arming state: -1 armed (saw a clear negative), +1 fired
+float tunerPrevV = 0.0f;       // previous sample value (for sub-sample interpolation)
+float tunerLastCrossUs = 0.0f; // interpolated µs of the last rising zero crossing
 unsigned long lastCrossUs = 0; // micros() of the last rising crossing / auto-trigger
 
 // Timing used for engineering-unit horizontal scale (measured feed interval).
@@ -406,6 +408,8 @@ static void ScopeApplyModeDefaults() {
         tunerHz = 0.0f;
         tunerAmp = 0.0f;
         tunerPrevSign = 0;
+        tunerPrevV = 0.0f;
+        tunerLastCrossUs = 0.0f;
         lastCrossUs = 0;
         break;
     }
@@ -455,27 +459,45 @@ void ScopeFeedSample(int ch1adc, int ch2adc, bool clkHigh) {
     trig = clkHigh;
 
     if (menuMode == MODE_TUNER) {
-        // Zero-crossing pitch detection on the selected channel (hysteresis).
+        // Pitch detection: measure the period between successive RISING zero
+        // crossings of the selected channel. Two refinements keep the readout
+        // steady and accurate:
+        //   • Hysteresis arming — a crossing only counts after the signal has
+        //     dipped clearly negative (< -HYST), so noise near zero can't
+        //     retrigger within a cycle.
+        //   • Sub-sample interpolation — the true zero crossing rarely lands on
+        //     a sample boundary; linearly interpolating between the straddling
+        //     samples removes the ±½-sample period quantization that otherwise
+        //     makes the reading jump by a few Hz every frame.
         int adc = (tunerChan == 2) ? ch2adc : ch1adc;
-        int v = adc - 2048; // ±2048
-        int mag = v < 0 ? -v : v;
-        tunerAmp += 0.01f * ((float)mag - tunerAmp);
-        const int HYST = 40; // ignore noise near zero
-        int sign = (v > HYST) ? 1 : (v < -HYST ? -1 : tunerPrevSign);
-        if (tunerPrevSign <= 0 && sign > 0) { // rising crossing
-            if (lastCrossUs != 0) {
-                unsigned long periodUs = nowUs - lastCrossUs;
-                if (periodUs > 30 && periodUs < 1000000UL) {
-                    float f = 1.0e6f / (float)periodUs;
+        float v = (float)(adc - 2048); // ±2048
+        float mag = v < 0 ? -v : v;
+        tunerAmp += 0.01f * (mag - tunerAmp);
+        const float HYST = 40.0f; // ignore noise near zero
+
+        if (v < -HYST)
+            tunerPrevSign = -1; // arm once the signal is clearly negative
+        // Rising zero crossing while armed: prev sample below zero, this one at/above.
+        if (tunerPrevSign < 0 && tunerPrevV < 0.0f && v >= 0.0f) {
+            float dvdt = v - tunerPrevV; // > 0 here
+            float frac = (dvdt > 0.0f) ? (0.0f - tunerPrevV) / dvdt : 0.0f;
+            frac = constrain(frac, 0.0f, 1.0f); // crossing is frac samples past prev sample
+            // Sample times: prev at nowUs-feedIntervalUs, current at nowUs.
+            float crossUs = (float)nowUs - (1.0f - frac) * feedIntervalUs;
+            if (tunerLastCrossUs != 0.0f) {
+                float periodUs = crossUs - tunerLastCrossUs;
+                if (periodUs > 30.0f && periodUs < 1000000.0f) {
+                    float f = 1.0e6f / periodUs;
                     if (tunerHz <= 0.0f)
                         tunerHz = f;
                     else
                         tunerHz += 0.2f * (f - tunerHz); // smooth
                 }
             }
-            lastCrossUs = nowUs;
+            tunerLastCrossUs = crossUs;
+            tunerPrevSign = 1; // disarm until the signal goes negative again
         }
-        tunerPrevSign = sign;
+        tunerPrevV = v;
         if (tunerAmp < 60.0f) // signal too small -> no reading
             tunerHz = 0.0f;
         return;

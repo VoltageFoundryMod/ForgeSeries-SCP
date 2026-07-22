@@ -44,11 +44,17 @@ CF_SCALAR(int,  _shotIdx)
 CF_SCALAR(int,  _capIdx)
 CF_SCALAR(int,  specPeakBin)
 
+// ── Engine clock (shim, fw_engine.cpp) — per-instance so N modules don't share ─
+CF_SCALAR(unsigned long, g_engineMicros)
+CF_SCALAR(double,        g_engineMicrosFrac)
+
 // ── Tuner + timing ───────────────────────────────────────────────────────────
 CF_SCALAR(int,           tunerChan)
 CF_SCALAR(float,         tunerHz)
 CF_SCALAR(float,         tunerAmp)
 CF_SCALAR(int,           tunerPrevSign)
+CF_SCALAR(float,         tunerPrevV)
+CF_SCALAR(float,         tunerLastCrossUs)
 CF_SCALAR(unsigned long, lastCrossUs)
 CF_SCALAR(unsigned long, lastFeedUs)
 CF_SCALAR(float,         feedIntervalUs)

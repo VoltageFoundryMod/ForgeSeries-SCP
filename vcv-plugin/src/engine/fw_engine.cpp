@@ -20,7 +20,14 @@ TwoWire Wire1;
 
 // Engine time advances by the host's sample time (deterministic; correct under
 // faster-than-realtime rendering), not wall-clock. feedSample() advances it.
+// g_engineMicrosFrac carries the sub-microsecond remainder so accumulation does
+// not drift: rounding each sample's dt to a whole microsecond added a steady
+// per-sample error (e.g. +0.32µs at 44.1kHz → a ~1.4% fast clock) that biased
+// every time measurement, most visibly the tuner's detected pitch. Both are
+// per-instance (swapped in engine_state.def) so N modules keep N independent
+// clocks instead of all advancing one shared clock N× too fast.
 unsigned long g_engineMicros = 0;
+double g_engineMicrosFrac = 0.0;
 unsigned long micros() { return g_engineMicros; }
 unsigned long millis() { return g_engineMicros / 1000UL; }
 void delay(unsigned long) {}             // never block inside Rack
@@ -138,7 +145,9 @@ void destroyEngine(Engine *e) {
 
 void feedSample(Engine *e, float dt, float cv1Volts, float cv2Volts, bool clkHigh) {
     EngineScope scope(e);
-    g_engineMicros += (unsigned long)(dt * 1.0e6f + 0.5f);
+    double us = (double)g_engineMicros + g_engineMicrosFrac + (double)dt * 1.0e6;
+    g_engineMicros = (unsigned long)us;
+    g_engineMicrosFrac = us - (double)g_engineMicros;
     ScopeFeedSample(voltsToAdc(cv1Volts), voltsToAdc(cv2Volts), clkHigh);
 }
 
