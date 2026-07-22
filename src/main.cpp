@@ -111,8 +111,8 @@ void loop() {
     bool clk = digitalRead(CLK_IN_PIN);
     ScopeFeedSample(ch1, ch2, clk);
 
-    // Buffered oscilloscope through: CV1 -> Out1, CV2 -> Out2 (Out3/4 idle).
-    DACWriteAll((uint16_t)ch1, (uint16_t)ch2, 0, 0);
+    // Buffered oscilloscope through: CV1 -> Out1/Out3, CV2 -> Out2/Out4.
+    DACWriteAll((uint16_t)ch1, (uint16_t)ch2, (uint16_t)ch1, (uint16_t)ch2);
 }
 
 // Core 1: render the current mode + flush over the display bus.

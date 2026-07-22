@@ -25,6 +25,8 @@ struct ForgeView : forgevcv::ForgeModule {
     enum OutputId {
         OUT1_OUTPUT, // buffered pass-through of CV1
         OUT2_OUTPUT, // buffered pass-through of CV2
+        OUT3_OUTPUT, // additional CV 1 through
+        OUT4_OUTPUT, // additional CV 2 through
         OUTPUTS_LEN
     };
     enum LightId { LIGHTS_LEN };
@@ -40,6 +42,8 @@ struct ForgeView : forgevcv::ForgeModule {
         configInput(CV2IN_INPUT, "CV 2 (second trace, LFO mode)");
         configOutput(OUT1_OUTPUT, "CV 1 through");
         configOutput(OUT2_OUTPUT, "CV 2 through");
+        configOutput(OUT3_OUTPUT, "CV 1 through");
+        configOutput(OUT4_OUTPUT, "CV 2 through");
         cvRange = CV_BIPOLAR; // scopes usually watch bipolar signals
         fv = fvengine::createEngine();
     }
@@ -67,6 +71,8 @@ struct ForgeView : forgevcv::ForgeModule {
         // (independent of the display CV-range mapping), every sample.
         outputs[OUT1_OUTPUT].setVoltage(inputs[CV1IN_INPUT].getVoltage());
         outputs[OUT2_OUTPUT].setVoltage(inputs[CV2IN_INPUT].getVoltage());
+        outputs[OUT3_OUTPUT].setVoltage(inputs[CV1IN_INPUT].getVoltage());
+        outputs[OUT4_OUTPUT].setVoltage(inputs[CV2IN_INPUT].getVoltage());
 
         // Feed the acquisition engine at control rate.
         if (++feedDecim >= ENGINE_DECIM) {
@@ -127,6 +133,8 @@ struct ForgeViewWidget : ModuleWidget {
 
         addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 95.068)), module, ForgeView::OUT1_OUTPUT));
         addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 95.068)), module, ForgeView::OUT2_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(7.412, 109.34)), module, ForgeView::OUT3_OUTPUT));
+        addOutput(createOutputCentered<PJ301MPort>(mm2px(Vec(22.652, 109.34)), module, ForgeView::OUT4_OUTPUT));
 
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
@@ -148,8 +156,16 @@ struct ForgeViewWidget : ModuleWidget {
     void onHoverKey(const event::HoverKey &e) override {
         if (encoder && (e.mods & RACK_MOD_MASK) == 0) {
             if (e.action == GLFW_PRESS || e.action == GLFW_REPEAT) {
-                if (e.keyName == "[") { encoder->emit(-1); e.consume(this); return; }
-                if (e.keyName == "]") { encoder->emit(+1); e.consume(this); return; }
+                if (e.keyName == "[") {
+                    encoder->emit(-1);
+                    e.consume(this);
+                    return;
+                }
+                if (e.keyName == "]") {
+                    encoder->emit(+1);
+                    e.consume(this);
+                    return;
+                }
             }
             if (e.action == GLFW_PRESS && e.key == GLFW_KEY_SPACE) {
                 encoder->push();
