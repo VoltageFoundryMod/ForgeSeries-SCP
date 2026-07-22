@@ -42,6 +42,7 @@ CF_SCALAR(int,  _decimCount)
 CF_SCALAR(bool, _shotCapturing)
 CF_SCALAR(int,  _shotIdx)
 CF_SCALAR(int,  _capIdx)
+CF_SCALAR(int,  specPeakBin)
 
 // ── Tuner + timing ───────────────────────────────────────────────────────────
 CF_SCALAR(int,           tunerChan)

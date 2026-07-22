@@ -27,6 +27,11 @@
 
 #include <math.h>
 
+// Custom fonts for the Tuner's big readout only. The overlay menu and axis
+// labels keep the classic 5x7 font (dense layouts built on its 6x8 cell).
+#include "fonts/helvB12.h"
+#include "fonts/helvB24.h"
+
 // fixfft.cpp is #included (not compiled separately) so this single source builds
 // as part of whichever TU pulls in scope.hpp — the RP2040 firmware or the VCV
 // engine — mirroring how ClockForge vendors quantizer.cpp / scales.cpp.
@@ -142,6 +147,7 @@ char cv1[SCREEN_WIDTH] = {0}; // channel 2 trace (LFO / X-Y mode)
 
 char fftCap[SCREEN_WIDTH] = {0};            // spectrum: rolling capture buffer
 unsigned char spec[SCREEN_WIDTH / 2] = {0}; // spectrum: last computed magnitudes (64 bins)
+int specPeakBin = 0;                        // spectrum: bin index of the tallest peak (0 = none)
 
 // X-Y persistence ring (screen units); drawn in full every frame.
 int xyPersist = 3;    // persistence level index (see kXYPersistNames; 3 = 0.5s)
@@ -389,6 +395,7 @@ static void ScopeApplyModeDefaults() {
         param1 = 2; // high-frequency emphasis
         param2 = 3; // noise floor
         _capIdx = 0;
+        specPeakBin = 0;
         break;
     case MODE_XY:
         xyHead = 0;
@@ -487,10 +494,18 @@ void ScopeFeedSample(int ch1adc, int ch2adc, bool clkHigh) {
                 im[i] = 0;
             }
             fix_fft(data, im, 7, 0); // 2^7 = 128-point FFT
+            int peakBin = 0, peakMag = 0;
             for (int i = 0; i < SCREEN_WIDTH / 2; i++) {
                 int level = (int)sqrtf((float)(data[i] * data[i] + im[i] * im[i]));
                 spec[i] = (unsigned char)constrain(level, 0, SCREEN_HEIGHT);
+                // Track the tallest bin for the peak-frequency readout. Skip bins
+                // 0/1 (DC + leakage) so a sub-bin offset doesn't win over a tone.
+                if (i >= 2 && level > peakMag) {
+                    peakMag = level;
+                    peakBin = i;
+                }
             }
+            specPeakBin = (peakMag >= param2) ? peakBin : 0; // gate on the noise floor
         }
         return;
     }
@@ -625,17 +640,30 @@ static void ScopeDrawTuner(Adafruit_SSD1306 &display) {
     display.print("CH");
     display.print(tunerChan);
 
-    if (tunerHz <= 0.0f) {
-        display.setTextSize(2);
-        display.setCursor(24, 24);
-        display.print("-- Hz");
+    // Big frequency readout: helvB24 digits + baseline-aligned helvB12 "Hz".
+    // Custom fonts position by baseline; 27 puts the digit tops at y=3.
+    // Decimals shrink with magnitude so the widest case stays inside 128px.
+    char fb[16];
+    if (tunerHz <= 0.0f)
+        snprintf(fb, sizeof(fb), "--");
+    else if (tunerHz < 100.0f)
+        snprintf(fb, sizeof(fb), "%.2f", (double)tunerHz);
+    else if (tunerHz < 1000.0f)
+        snprintf(fb, sizeof(fb), "%.1f", (double)tunerHz);
+    else
+        snprintf(fb, sizeof(fb), "%.0f", (double)tunerHz);
+    int16_t fx, fy;
+    uint16_t fw, fh;
+    display.setFont(&helvB24);
+    display.getTextBounds(fb, 2, 27, &fx, &fy, &fw, &fh);
+    display.setCursor(2, 27);
+    display.print(fb);
+    display.setFont(&helvB12);
+    display.setCursor(fx + (int)fw + 4, 27);
+    display.print("Hz");
+    display.setFont(nullptr);
+    if (tunerHz <= 0.0f)
         return;
-    }
-    display.setTextSize(2);
-    display.setCursor(6, 6);
-    display.print((double)tunerHz, tunerHz < 100.0f ? 2 : 1);
-    display.setTextSize(1);
-    display.print(" Hz");
 
     // Nearest note (MIDI number) + cents deviation.
     float midi = 69.0f + 12.0f * log2f(tunerHz / 440.0f);
@@ -646,13 +674,16 @@ static void ScopeDrawTuner(Adafruit_SSD1306 &display) {
     int idx = ((note % 12) + 12) % 12;
     int octave = note / 12 - 1;
 
-    display.setTextSize(2);
-    display.setCursor(6, 32);
+    // Note name + octave in the big font (baseline 52: top at y=28, clear of
+    // both the frequency block above and the tuning bar at y=54).
+    display.setFont(&helvB12);
+    display.setCursor(6, 48);
     display.print(names[idx]);
     display.print(octave);
+    display.setFont(nullptr);
 
     display.setTextSize(1);
-    display.setCursor(74, 38);
+    display.setCursor(76, 40);
     display.print((int)cents);
     display.print("c");
 
@@ -749,6 +780,27 @@ void ScopeRender(Adafruit_SSD1306 &display) {
                 level = constrain(level, 0, SCREEN_HEIGHT - 1);
                 display.fillRect(i * 2, (SCREEN_HEIGHT - 1) - level, 2, level, WHITE);
             }
+        }
+        // Peak-frequency readout: bin i is at i*Fs/128, Fs = 1/feedInterval.
+        if (specPeakBin > 0 && feedIntervalUs > 0.1f) {
+            float peakHz = (float)specPeakBin * 1.0e6f /
+                           (feedIntervalUs * (float)SCREEN_WIDTH);
+            char b[16];
+            if (peakHz >= 1000.0f)
+                snprintf(b, sizeof(b), "%.2fkHz", (double)(peakHz / 1000.0f));
+            else
+                snprintf(b, sizeof(b), "%dHz", (int)(peakHz + 0.5f));
+            display.setTextSize(1);
+            display.setTextColor(WHITE, BLACK);
+            int16_t x1, y1;
+            uint16_t w, h;
+            display.getTextBounds(b, 1, 1, &x1, &y1, &w, &h);
+            // Place on the top-right, clear of the peak marker line (which is drawn at y=0).
+            display.setCursor(SCREEN_WIDTH - 1 - w, 1);
+            display.print(b);
+            // Downward marker over the peak bar (2px-wide bins, so column peak*2).
+            int mx = specPeakBin * 2;
+            display.drawLine(mx, 0, mx, 3, WHITE);
         }
         if (showLabels)
             ScopeDrawUnits(display, false);
