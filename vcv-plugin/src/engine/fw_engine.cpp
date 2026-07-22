@@ -164,12 +164,10 @@ void encoderButton(Engine *e, bool pressed) {
 }
 
 // ── Curated state bridge ─────────────────────────────────────────────────────
-static const char *kModeNames[SCOPE_MODE_COUNT] = {"LFO", "Wave", "Shot", "Spectrum"};
-
 int modeCount() { return SCOPE_MODE_COUNT; }
 std::string modeName(int index) {
     if (index < 0 || index >= SCOPE_MODE_COUNT) return "";
-    return kModeNames[index];
+    return ScopeModeName(index + 1); // firmware modes are 1-based
 }
 int mode(Engine *e) {
     EngineScope scope(e);
@@ -182,6 +180,8 @@ void setMode(Engine *e, int m) {
         menuMode = m;
         ScopeApplyModeDefaults();
         oldMenuMode = menuMode;
+        if (param > ScopeParamCount() - 1) // new mode may have a shorter list
+            param = ScopeParamCount() - 1;
         hideTimer = millis();
     }
 }
@@ -219,6 +219,86 @@ void setVerticalScale(Engine *e, float v) {
     EngineScope scope(e);
     ::scale = constrain(v, 0.05f, 20.0f);
     hideTimer = millis();
+}
+
+bool frozen(Engine *e) {
+    EngineScope scope(e);
+    return ::frozen;
+}
+void setFrozen(Engine *e, bool f) {
+    EngineScope scope(e);
+    ::frozen = f;
+    hideTimer = millis();
+}
+
+int trigMode(Engine *e) {
+    EngineScope scope(e);
+    return ::trigMode;
+}
+void setTrigMode(Engine *e, int v) {
+    EngineScope scope(e);
+    ::trigMode = constrain(v, 0, 3);
+    hideTimer = millis();
+}
+
+int offsetCh1(Engine *e) {
+    EngineScope scope(e);
+    return ::offset0;
+}
+void setOffsetCh1(Engine *e, int v) {
+    EngineScope scope(e);
+    ::offset0 = constrain(v, -24, 24);
+    hideTimer = millis();
+}
+int offsetCh2(Engine *e) {
+    EngineScope scope(e);
+    return ::offset1;
+}
+void setOffsetCh2(Engine *e, int v) {
+    EngineScope scope(e);
+    ::offset1 = constrain(v, -24, 24);
+    hideTimer = millis();
+}
+
+bool showLabels(Engine *e) {
+    EngineScope scope(e);
+    return ::showLabels;
+}
+void setShowLabels(Engine *e, bool v) {
+    EngineScope scope(e);
+    ::showLabels = v;
+    hideTimer = millis();
+}
+
+int tunerChannel(Engine *e) {
+    EngineScope scope(e);
+    return ::tunerChan;
+}
+void setTunerChannel(Engine *e, int ch) {
+    EngineScope scope(e);
+    ::tunerChan = constrain(ch, 1, 2);
+    hideTimer = millis();
+}
+
+int xyPersist(Engine *e) {
+    EngineScope scope(e);
+    return ::xyPersist;
+}
+void setXyPersist(Engine *e, int v) {
+    EngineScope scope(e);
+    ::xyPersist = constrain(v, 0, XY_PERSIST_COUNT - 1);
+    hideTimer = millis();
+}
+int xyPersistCount() { return XY_PERSIST_COUNT; }
+std::string xyPersistName(int index) {
+    if (index < 0 || index >= XY_PERSIST_COUNT) return "";
+    return kXYPersistNames[index];
+}
+
+void setInputSpanVolts(Engine *e, float v) {
+    EngineScope scope(e);
+    if (v > 0.1f)
+        ::scopeInputSpanV = v;
 }
 
 } // namespace fvengine

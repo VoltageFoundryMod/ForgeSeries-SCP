@@ -20,10 +20,17 @@ CF_SCALAR(int,   param_select)
 CF_SCALAR(int,   param1)
 CF_SCALAR(int,   param2)
 CF_SCALAR(float, scale)
+CF_SCALAR(int,   offset0)
+CF_SCALAR(int,   offset1)
+CF_SCALAR(int,   trigMode)
+CF_SCALAR(bool,  frozen)
+CF_SCALAR(bool,  showLabels)
+CF_SCALAR(float, scopeInputSpanV)
 
 // ── Encoder / overlay ────────────────────────────────────────────────────────
 CF_SCALAR(bool,          switchState)
 CF_SCALAR(bool,          oldSwitchState)
+CF_SCALAR(unsigned long, pressStartMs)
 CF_SCALAR(unsigned long, hideTimer)
 CF_SCALAR(bool,          overlayOn)
 
@@ -36,8 +43,25 @@ CF_SCALAR(bool, _shotCapturing)
 CF_SCALAR(int,  _shotIdx)
 CF_SCALAR(int,  _capIdx)
 
+// ── Tuner + timing ───────────────────────────────────────────────────────────
+CF_SCALAR(int,           tunerChan)
+CF_SCALAR(float,         tunerHz)
+CF_SCALAR(float,         tunerAmp)
+CF_SCALAR(int,           tunerPrevSign)
+CF_SCALAR(unsigned long, lastCrossUs)
+CF_SCALAR(unsigned long, lastFeedUs)
+CF_SCALAR(float,         feedIntervalUs)
+
 // ── Trace + spectrum buffers ─────────────────────────────────────────────────
 CF_ARRAY(char,          cv0,    128)
 CF_ARRAY(char,          cv1,    128)
 CF_ARRAY(char,          fftCap, 128)
 CF_ARRAY(unsigned char, spec,   64)
+
+// ── X-Y persistence ring ─────────────────────────────────────────────────────
+CF_SCALAR(int,  xyPersist)
+CF_SCALAR(int,  xyHead)
+CF_SCALAR(int,  xyCount)
+CF_SCALAR(int,  xyDecimCount)
+CF_ARRAY(char,  xyx, 256)
+CF_ARRAY(char,  xyy, 256)

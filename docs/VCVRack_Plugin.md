@@ -7,15 +7,23 @@ plugin through an Arduino compatibility shim.
 
 ## Scope modes
 
-| Mode         | What it shows                                             | Par1        | Par2            |
-| ------------ | -------------------------------------------------------- | ----------- | --------------- |
-| **LFO**      | Dual-trace slow scope of CV1 + CV2                       | Timebase    | Vertical offset |
-| **Wave**     | Single-channel oscilloscope (CV1)                        | Timebase    | Refresh divider |
-| **Shot**     | Triggered single-shot capture of CV1 (on CLK rising edge)| Timebase    | (Trigger)       |
-| **Spectrum** | 128-point FFT magnitude of CV1                           | HF emphasis | Noise floor     |
+| Mode         | What it shows                               | Parameters                                                 |
+| ------------ | ------------------------------------------- | ---------------------------------------------------------- |
+| **Dual**     | Dual-trace slow scope of CV1 + CV2          | Timebase, Off1, Off2, Vert, Info                           |
+| **Single**   | Single-channel oscilloscope (CV1)           | Timebase, Off1, Vert, Refresh, Info                        |
+| **Shot**     | Triggered single-shot capture of CV1        | Timebase, Trig (Off/Rising/Falling/Auto), Off1, Vert, Info |
+| **Spectrum** | 128-point FFT magnitude of CV1              | HF emphasis, Noise floor, Info                             |
+| **X-Y**      | Lissajous scatter — CV1 = X, CV2 = Y        | Vert, Pers (persistence Live–60s), Info                    |
+| **Tuner**    | Frequency meter (Hz + nearest note + cents) | Chan (CV1/CV2)                                             |
 
-The encoder navigates a small on-screen overlay: rotate to move the cursor, click
-to edit a row (Mode / Par1 / Par2 / Vertical), click again to commit.
+The encoder navigates a **per-mode named parameter list**: rotate to move the
+cursor through that mode's parameters, click to edit the highlighted row, click
+again to commit. The overlay scrolls when a mode has more rows than fit. **Mode
+and Trig are shown by name** (not numbers). A **long-press** of the encoder
+(~800 ms) toggles **Freeze-frame** (a `HOLD` marker appears). The **Info** row
+toggles engineering-unit axis labels (V/div and time/div; approximate on hardware,
+derived from the measured feed interval — exact-ish in Rack where the sample rate
+is known).
 
 ## Architecture
 

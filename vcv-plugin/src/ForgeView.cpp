@@ -39,7 +39,7 @@ struct ForgeView : forgevcv::ForgeModule {
         config(PARAMS_LEN, INPUTS_LEN, OUTPUTS_LEN, LIGHTS_LEN);
         configInput(CLKIN_INPUT, "Clock / Trigger (Shot mode)");
         configInput(CV1IN_INPUT, "CV 1 (main trace)");
-        configInput(CV2IN_INPUT, "CV 2 (second trace, LFO mode)");
+        configInput(CV2IN_INPUT, "CV 2 (second trace / X-Y Y-axis)");
         configOutput(OUT1_OUTPUT, "CV 1 through");
         configOutput(OUT2_OUTPUT, "CV 2 through");
         configOutput(OUT3_OUTPUT, "CV 1 through");
@@ -90,6 +90,9 @@ struct ForgeView : forgevcv::ForgeModule {
             renderPeriod = 1;
         if (++renderDecim >= renderPeriod) {
             renderDecim = 0;
+            // Tell the engine how many volts full-scale spans, so its V/div label
+            // matches the selected input range (0–5V => 5V span, else 10V).
+            fvengine::setInputSpanVolts(fv, cvRange == CV_UNIPOLAR ? 5.f : 10.f);
             fvengine::getFramebuffer(fv, fb);
         }
     }
@@ -101,6 +104,12 @@ struct ForgeView : forgevcv::ForgeModule {
         json_object_set_new(root, "param1", json_integer(fvengine::param1(fv)));
         json_object_set_new(root, "param2", json_integer(fvengine::param2(fv)));
         json_object_set_new(root, "vscale", json_real(fvengine::verticalScale(fv)));
+        json_object_set_new(root, "trigMode", json_integer(fvengine::trigMode(fv)));
+        json_object_set_new(root, "offset1", json_integer(fvengine::offsetCh1(fv)));
+        json_object_set_new(root, "offset2", json_integer(fvengine::offsetCh2(fv)));
+        json_object_set_new(root, "showLabels", json_boolean(fvengine::showLabels(fv)));
+        json_object_set_new(root, "tunerChan", json_integer(fvengine::tunerChannel(fv)));
+        json_object_set_new(root, "xyPersist", json_integer(fvengine::xyPersist(fv)));
         return root;
     }
 
@@ -114,6 +123,18 @@ struct ForgeView : forgevcv::ForgeModule {
             fvengine::setParam2(fv, (int)json_integer_value(j));
         if (json_t *j = json_object_get(root, "vscale"))
             fvengine::setVerticalScale(fv, (float)json_number_value(j));
+        if (json_t *j = json_object_get(root, "trigMode"))
+            fvengine::setTrigMode(fv, (int)json_integer_value(j));
+        if (json_t *j = json_object_get(root, "offset1"))
+            fvengine::setOffsetCh1(fv, (int)json_integer_value(j));
+        if (json_t *j = json_object_get(root, "offset2"))
+            fvengine::setOffsetCh2(fv, (int)json_integer_value(j));
+        if (json_t *j = json_object_get(root, "showLabels"))
+            fvengine::setShowLabels(fv, json_boolean_value(j));
+        if (json_t *j = json_object_get(root, "tunerChan"))
+            fvengine::setTunerChannel(fv, (int)json_integer_value(j));
+        if (json_t *j = json_object_get(root, "xyPersist"))
+            fvengine::setXyPersist(fv, (int)json_integer_value(j));
     }
 };
 
@@ -139,7 +160,7 @@ struct ForgeViewWidget : ModuleWidget {
         // Emulated OLED over the display cutout.
         forgevcv::FramebufferDisplay *disp = new forgevcv::FramebufferDisplay();
         disp->module = module;
-        disp->box.pos = mm2px(Vec(2.244, 19.776));
+        disp->box.pos = mm2px(Vec(2.559, 19.776));
         disp->box.size = mm2px(Vec(25.362, 14.994));
         addChild(disp);
 
@@ -217,6 +238,54 @@ struct ForgeViewWidget : ModuleWidget {
                     [=]() { return fvengine::param2(m->fv) == v; },
                     [=]() { fvengine::setParam2(m->fv, v); }));
         }));
+
+        // Trigger mode (Shot). Shown always; only affects Shot mode.
+        static const std::vector<std::string> trigNames = {"Off", "Rising", "Falling", "Auto"};
+        menu->addChild(createIndexSubmenuItem(
+            "Trigger", trigNames,
+            [=]() { return (size_t)fvengine::trigMode(m->fv); },
+            [=](size_t v) { fvengine::setTrigMode(m->fv, (int)v); }));
+
+        // Tuner input channel (only affects Tuner mode).
+        static const std::vector<std::string> tunerChans = {"CV 1", "CV 2"};
+        menu->addChild(createIndexSubmenuItem(
+            "Tuner input", tunerChans,
+            [=]() { return (size_t)(fvengine::tunerChannel(m->fv) - 1); },
+            [=](size_t v) { fvengine::setTunerChannel(m->fv, (int)v + 1); }));
+
+        // X-Y phosphor persistence (only affects X-Y mode).
+        std::vector<std::string> persist;
+        for (int i = 0; i < fvengine::xyPersistCount(); i++)
+            persist.push_back(fvengine::xyPersistName(i));
+        menu->addChild(createIndexSubmenuItem(
+            "X-Y persistence", persist,
+            [=]() { return (size_t)fvengine::xyPersist(m->fv); },
+            [=](size_t v) { fvengine::setXyPersist(m->fv, (int)v); }));
+
+        // Per-channel vertical offsets.
+        menu->addChild(createSubmenuItem("Offset CH1", string::f("%+d", fvengine::offsetCh1(m->fv)), [=](Menu *menu) {
+            for (int v = 24; v >= -24; v -= 4)
+                menu->addChild(createCheckMenuItem(
+                    string::f("%+d", v), "",
+                    [=]() { return fvengine::offsetCh1(m->fv) == v; },
+                    [=]() { fvengine::setOffsetCh1(m->fv, v); }));
+        }));
+        menu->addChild(createSubmenuItem("Offset CH2", string::f("%+d", fvengine::offsetCh2(m->fv)), [=](Menu *menu) {
+            for (int v = 24; v >= -24; v -= 4)
+                menu->addChild(createCheckMenuItem(
+                    string::f("%+d", v), "",
+                    [=]() { return fvengine::offsetCh2(m->fv) == v; },
+                    [=]() { fvengine::setOffsetCh2(m->fv, v); }));
+        }));
+
+        menu->addChild(createBoolMenuItem(
+            "Axis labels (V/div, time/div)", "",
+            [=]() { return fvengine::showLabels(m->fv); },
+            [=](bool v) { fvengine::setShowLabels(m->fv, v); }));
+        menu->addChild(createBoolMenuItem(
+            "Freeze frame", "",
+            [=]() { return fvengine::frozen(m->fv); },
+            [=](bool v) { fvengine::setFrozen(m->fv, v); }));
     }
 };
 

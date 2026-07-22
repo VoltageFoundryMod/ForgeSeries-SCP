@@ -40,4 +40,30 @@ void setParam2(Engine *, int v);
 float verticalScale(Engine *);
 void setVerticalScale(Engine *, float v);
 
+bool frozen(Engine *); // freeze-frame hold
+void setFrozen(Engine *, bool);
+
+int trigMode(Engine *); // Shot: 0=Off 1=Rising 2=Falling 3=Auto
+void setTrigMode(Engine *, int);
+
+int offsetCh1(Engine *); // per-channel vertical offsets (screen units)
+void setOffsetCh1(Engine *, int);
+int offsetCh2(Engine *);
+void setOffsetCh2(Engine *, int);
+
+bool showLabels(Engine *); // engineering-unit axis labels on/off
+void setShowLabels(Engine *, bool);
+
+int tunerChannel(Engine *); // tuner input channel (1 or 2)
+void setTunerChannel(Engine *, int);
+
+int xyPersist(Engine *); // X-Y phosphor persistence level (0..5)
+void setXyPersist(Engine *, int);
+int xyPersistCount();               // number of persistence presets
+std::string xyPersistName(int index); // 0-based preset name ("Live", "0.5s", …)
+
+// Host display calibration: full-scale ADC spans this many input volts (for the
+// V/div label). VCV sets it from the CV-range setting.
+void setInputSpanVolts(Engine *, float v);
+
 } // namespace fvengine

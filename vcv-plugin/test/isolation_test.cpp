@@ -101,6 +101,74 @@ int main() {
     std::printf("  encoder-driven mode(C)=%d\n", mode(c));
     CHECK(mode(c) == 2, "encoder rotate+click changes mode (Wave)");
 
+    // ── New modes + curated accessors ────────────────────────────────────────
+    CHECK(modeCount() == 6, "six scope modes registered");
+    CHECK(modeName(4) == "X-Y" && modeName(5) == "Tuner", "new modes are named");
+
+    // X-Y renders a scatter from two channels without crashing.
+    Engine *d = createEngine();
+    setMode(d, 5);      // X-Y
+    setXyPersist(d, 0); // "Live" -> full-rate capture, dense scatter
+    CHECK(mode(d) == 5, "engine D switched to X-Y");
+    CHECK(xyPersistCount() == 10 && xyPersistName(3) == "0.5s" && xyPersistName(9) == "60s",
+          "persistence presets named (up to 60s)");
+    for (int i = 0; i < 400; i++) {
+        float ph = (float)i / 32.0f * 2.0f * 3.14159265f;
+        feedSample(d, 2.0f / 44100.0f, 2.5f + 2.0f * std::sin(ph),
+                   2.5f + 2.0f * std::sin(ph * 2.0f), false);
+    }
+    uint8_t fbD[1024];
+    getFramebuffer(d, fbD);
+    std::printf("  X-Y framebuffer lit pixels: %d\n", litPixels(fbD));
+    CHECK(litPixels(fbD) > 20, "X-Y mode renders a Lissajous scatter");
+    CHECK(xyPersist(d) == 0, "X-Y persistence level stored");
+
+    // Tuner: feed a ~440 Hz sine and expect a plausible reading (no crash).
+    setMode(d, 6); // Tuner
+    for (int i = 0; i < 4000; i++) {
+        float ph = (float)i * 440.0f * (2.0f / 44100.0f) * 2.0f * 3.14159265f;
+        feedSample(d, 2.0f / 44100.0f, 2.5f + 2.0f * std::sin(ph), 2.5f, false);
+    }
+    getFramebuffer(d, fbD); // must not crash
+    CHECK(mode(d) == 6, "Tuner mode active + renders");
+
+    // Per-instance isolation of the new state (D vs a fresh engine).
+    Engine *f = createEngine();
+    setFrozen(d, true);
+    setOffsetCh1(d, 12);
+    setOffsetCh2(d, -8);
+    setTrigMode(d, 2);
+    setShowLabels(d, true);
+    CHECK(frozen(d) && !frozen(f), "freeze is per-instance");
+    CHECK(offsetCh1(d) == 12 && offsetCh1(f) == 0, "CH1 offset per-instance");
+    CHECK(offsetCh2(d) == -8, "CH2 offset stored");
+    CHECK(trigMode(d) == 2 && trigMode(f) != 2, "trigger mode per-instance");
+    CHECK(showLabels(d) && !showLabels(f), "labels toggle per-instance");
+    setXyPersist(f, 9); // 60s
+    CHECK(xyPersist(f) == 9 && xyPersist(d) == 0, "X-Y persistence per-instance");
+
+    // Freeze holds the frame: once frozen, feeding must not change the frame.
+    // (Compare two already-frozen captures so the HOLD marker is present in both.)
+    setMode(f, 1); // LFO
+    setFrozen(f, false);
+    for (int i = 0; i < 300; i++)
+        feedSample(f, 2.0f / 44100.0f, 2.5f + 2.0f * std::sin((float)i / 8.f), 2.5f, false);
+    setFrozen(f, true);
+    uint8_t before[1024];
+    getFramebuffer(f, before);
+    for (int i = 0; i < 300; i++)
+        feedSample(f, 2.0f / 44100.0f, 2.5f + 2.0f * std::sin((float)i / 3.f + 1.f), 2.5f, false);
+    uint8_t after[1024];
+    getFramebuffer(f, after);
+    int diff = 0;
+    for (int i = 0; i < 1024; i++)
+        if (before[i] != after[i]) diff++;
+    std::printf("  frozen frame byte-diff: %d\n", diff);
+    CHECK(diff == 0, "freeze-frame holds the trace (frozen feeds change nothing)");
+
+    destroyEngine(d);
+    destroyEngine(f);
+
     // ── Hot path: interleave feeds on all three, ensure stability ────────────
     for (int i = 0; i < 3000; i++) {
         float v = 2.5f + 2.0f * std::sin((float)i / 20.0f);
