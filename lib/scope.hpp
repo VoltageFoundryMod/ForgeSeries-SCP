@@ -75,11 +75,11 @@ static const char *kTrigNames[4] = {"Off", "Rising", "Falling", "Auto"};
 // decimated so the fixed-size ring spans that whole window (longer persistence
 // => coarser sampling, which is fine because a stable figure fills in over time).
 #define XY_RING 256
-#define XY_PERSIST_COUNT 10
+#define XY_PERSIST_COUNT 13
 static const char *kXYPersistNames[XY_PERSIST_COUNT] = {
-    "Live", "0.1s", "0.25s", "0.5s", "1s", "2s", "5s", "10s", "30s", "60s"};
+    "Live", "0.1s", "0.25s", "0.5s", "1s", "2s", "5s", "10s", "30s", "60s", "2m", "3m", "5m"};
 static const int kXYPersistMs[XY_PERSIST_COUNT] = {
-    15, 100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000};
+    15, 100, 250, 500, 1000, 2000, 5000, 10000, 30000, 60000, 120000, 180000, 300000};
 
 // Max value of the timebase knob (param1) for the time-domain modes. The slowest
 // setting decimates by 1<<(TIMEBASE_MAX-1) input samples per stored pixel, i.e.
@@ -677,6 +677,10 @@ static void ScopeDrawOverlay(Adafruit_SSD1306 &display) {
     overlayOn = (millis() - hideTimer) < 5000;
     if (!overlayOn)
         return;
+
+    // The menu always renders at size 1; reset it here because some modes (Tuner)
+    // leave the GFX text size at 2 from their big readouts.
+    display.setTextSize(1);
 
     int count = ScopeParamCount();
     const int VIS = 4; // visible rows before scrolling
