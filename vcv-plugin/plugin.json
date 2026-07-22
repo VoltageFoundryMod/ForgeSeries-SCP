@@ -17,11 +17,7 @@
       "slug": "ForgeView",
       "name": "Forge View",
       "description": "Oscilloscope and spectrum analyzer",
-      "tags": [
-        "Visual",
-        "Digital",
-        "Hardware clone"
-      ]
+      "tags": ["Visual", "Digital", "Polyphonic", "Utility", "Hardware clone"]
     }
   ]
 }
