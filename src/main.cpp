@@ -70,6 +70,7 @@ void setup() {
     encoder.begin(); // deferred pin init (safe after runtime is up)
     InitWire();
     InitIO();
+    Serial.println("Initializing ForgeView version " VERSION "...");
     ScopeInit();
     ScopeSettingsInit(); // restore saved mode/params over the defaults
 
@@ -87,11 +88,12 @@ void setup() {
     display.clearDisplay();
     display.setTextWrap(false);
     display.cp437(true);
+    Serial.printf("SSD1306 init: %dx%d @ 0x%02X\n", SCREEN_WIDTH, SCREEN_HEIGHT, OLED_ADDRESS);
 
     // DAC is optional for the scope (used for input pass-through); warn only.
     if (!InitDAC())
         Serial.println("MCP4728 not found — output pass-through disabled.");
-
+    Serial.println("DAC init complete");
     // Splash + version screen.
     display.clearDisplay();
     display.drawBitmap(30, 0, VFM_Splash, 68, 64, 1);
@@ -108,7 +110,7 @@ void setup() {
     display.display();
     delay(1200);
 
-    Serial.println("Initialization complete.");
+    Serial.println("ForgeView initialization complete. Core 0: loop(), Core 1: loop1().");
     g_setupDone = true; // release Core 1's render loop
 }
 

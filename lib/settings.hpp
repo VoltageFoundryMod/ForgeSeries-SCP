@@ -17,7 +17,7 @@
 #include <cstring>
 
 #define SETTINGS_SAVE_DELAY_MS 5000
-#define SETTINGS_MAGIC 0x46565331u // "FVS1" — bump when the blob layout changes
+#define SETTINGS_MAGIC 0x46565332u // "FVS2" — bump when the blob layout changes
 
 struct ScopeSettingsBlob {
     uint32_t magic;
@@ -31,6 +31,7 @@ struct ScopeSettingsBlob {
     int8_t showLabels;
     int8_t xyPersist;
     int8_t tunerChan;
+    int8_t specChan;
     uint8_t checksum; // XOR of every byte before this field
 };
 
@@ -61,6 +62,7 @@ static void _SettingsCapture(ScopeSettingsBlob &b) {
     b.showLabels = showLabels ? 1 : 0;
     b.xyPersist = (int8_t)xyPersist;
     b.tunerChan = (int8_t)tunerChan;
+    b.specChan = (int8_t)specChan;
     b.checksum = _SettingsChecksum(b);
 }
 
@@ -79,6 +81,7 @@ static void _SettingsApply(const ScopeSettingsBlob &b) {
     showLabels = (b.showLabels != 0);
     xyPersist = constrain((int)b.xyPersist, 0, XY_PERSIST_COUNT - 1);
     tunerChan = constrain((int)b.tunerChan, 1, 2);
+    specChan = constrain((int)b.specChan, 1, 2);
 }
 
 // Load saved settings (if any) into the scope. Call once after ScopeInit().

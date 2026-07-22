@@ -107,7 +107,7 @@ int offset1 = 0; // CH2 vertical offset (screen units, +up)
 
 int trigMode = TRIG_RISING; // Shot-mode trigger selector
 bool frozen = false;        // freeze-frame: hold the display, ignore new samples
-bool showLabels = false;    // draw engineering-unit axis labels (V/div, time/div)
+bool showLabels = true;     // draw engineering-unit axis labels (V/div, time/div)
 
 bool switchState = true; // encoder push-button level (1 = released)
 bool oldSwitchState = true;
@@ -152,6 +152,7 @@ int8_t cv1[SCREEN_WIDTH] = {0}; // channel 2 trace (LFO / X-Y mode)
 int8_t fftCap[SCREEN_WIDTH] = {0};          // spectrum: rolling capture buffer
 unsigned char spec[SCREEN_WIDTH / 2] = {0}; // spectrum: last computed magnitudes (64 bins)
 int specPeakBin = 0;                        // spectrum: bin index of the tallest peak (0 = none)
+int specChan = 1;                           // spectrum: input channel analyzed (1 or 2)
 
 // X-Y persistence ring (screen units); drawn in full every frame.
 int xyPersist = 3;    // persistence level index (see kXYPersistNames; 3 = 0.5s)
@@ -210,6 +211,7 @@ enum ParamId {
     P_REFRESH,  // wave refresh divider (param2)
     P_HF,       // spectrum high-frequency emphasis (param1)
     P_FILT,     // spectrum noise floor (param2)
+    P_SCHAN,    // spectrum: which input channel to analyze (1 or 2)
     P_LABELS,   // engineering-unit labels on/off
     P_CHAN,     // tuner: which input channel to measure (1 or 2)
     P_PERSIST,  // X-Y: phosphor persistence duration
@@ -220,7 +222,7 @@ enum ParamId {
 static const ParamId kParamsLFO[] = {P_MODE, P_TIMEBASE, P_OFF1, P_OFF2, P_VSCALE, P_LABELS};
 static const ParamId kParamsWave[] = {P_MODE, P_TIMEBASE, P_OFF1, P_VSCALE, P_REFRESH, P_LABELS};
 static const ParamId kParamsShot[] = {P_MODE, P_TIMEBASE, P_TRIG, P_OFF1, P_VSCALE, P_LABELS};
-static const ParamId kParamsSpec[] = {P_MODE, P_HF, P_FILT, P_LABELS};
+static const ParamId kParamsSpec[] = {P_MODE, P_SCHAN, P_HF, P_FILT, P_LABELS};
 static const ParamId kParamsXY[] = {P_MODE, P_VSCALE, P_PERSIST, P_LABELS};
 static const ParamId kParamsTuner[] = {P_MODE, P_CHAN};
 
@@ -283,6 +285,7 @@ static const char *ScopeParamLabel(ParamId id) {
     case P_LABELS:
         return "Info";
     case P_CHAN:
+    case P_SCHAN:
         return "Chan";
     case P_PERSIST:
         return "Pers";
@@ -325,6 +328,9 @@ static void ScopeParamFormat(ParamId id, char *buf, int n) {
         break;
     case P_CHAN:
         snprintf(buf, n, "CH%d", tunerChan);
+        break;
+    case P_SCHAN:
+        snprintf(buf, n, "CH%d", specChan);
         break;
     case P_PERSIST:
         snprintf(buf, n, "%s", kXYPersistNames[constrain(xyPersist, 0, XY_PERSIST_COUNT - 1)]);
@@ -372,6 +378,9 @@ static void ScopeParamEdit(ParamId id, int dir) {
         break;
     case P_CHAN:
         tunerChan = constrain(tunerChan + dir, 1, 2);
+        break;
+    case P_SCHAN:
+        specChan = constrain(specChan + dir, 1, 2);
         break;
     case P_PERSIST:
         xyPersist = constrain(xyPersist + dir, 0, XY_PERSIST_COUNT - 1);
@@ -427,9 +436,10 @@ void ScopeInit() {
     offset0 = offset1 = 0;
     trigMode = TRIG_RISING;
     tunerChan = 1;
+    specChan = 1;
     xyPersist = 3;
     frozen = false;
-    showLabels = false;
+    showLabels = true;
     switchState = oldSwitchState = true;
     pressStartMs = 0;
     hideTimer = millis();
@@ -508,7 +518,8 @@ void ScopeFeedSample(int ch1adc, int ch2adc, bool clkHigh) {
     if (menuMode == MODE_SPECTRUM) {
         // Sample as fast as possible for maximum bandwidth; run the FFT when the
         // 128-sample window is full.
-        fftCap[_capIdx++] = (int8_t)constrain((ch1adc - 2048) >> 4, -127, 127);
+        int adc = (specChan == 2) ? ch2adc : ch1adc;
+        fftCap[_capIdx++] = (int8_t)constrain((adc - 2048) >> 4, -127, 127);
         if (_capIdx >= SCREEN_WIDTH) {
             _capIdx = 0;
             int8_t data[SCREEN_WIDTH];
@@ -812,29 +823,34 @@ void ScopeRender(Adafruit_SSD1306 &display) {
                 display.fillRect(i * 2, (SCREEN_HEIGHT - 1) - level, 2, level, WHITE);
             }
         }
-        // Peak-frequency readout: bin i is at i*Fs/128, Fs = 1/feedInterval.
-        if (specPeakBin > 0 && feedIntervalUs > 0.1f) {
-            float peakHz = (float)specPeakBin * 1.0e6f /
-                           (feedIntervalUs * (float)SCREEN_WIDTH);
-            char b[16];
-            if (peakHz >= 1000.0f)
-                snprintf(b, sizeof(b), "%.2fkHz", (double)(peakHz / 1000.0f));
-            else
-                snprintf(b, sizeof(b), "%dHz", (int)(peakHz + 0.5f));
+        // Info readouts, gated by the Info toggle (V/div is meaningless here):
+        // input-channel indicator top-right (same spot as the tuner's), peak
+        // frequency right-aligned on the row below it.
+        if (showLabels) {
             display.setTextSize(1);
             display.setTextColor(WHITE, BLACK);
-            int16_t x1, y1;
-            uint16_t w, h;
-            display.getTextBounds(b, 1, 1, &x1, &y1, &w, &h);
-            // Place on the top-right, clear of the peak marker line (which is drawn at y=0).
-            display.setCursor(SCREEN_WIDTH - 1 - w, 1);
-            display.print(b);
-            // Downward marker over the peak bar (2px-wide bins, so column peak*2).
-            int mx = specPeakBin * 2;
-            display.drawLine(mx, 0, mx, 3, WHITE);
+            display.setCursor(SCREEN_WIDTH - 1 - 3 * 6, 1);
+            display.print("CH");
+            display.print(specChan);
+            // Peak-frequency readout: bin i is at i*Fs/128, Fs = 1/feedInterval.
+            if (specPeakBin > 0 && feedIntervalUs > 0.1f) {
+                float peakHz = (float)specPeakBin * 1.0e6f /
+                               (feedIntervalUs * (float)SCREEN_WIDTH);
+                char b[16];
+                if (peakHz >= 1000.0f)
+                    snprintf(b, sizeof(b), "%.2fkHz", (double)(peakHz / 1000.0f));
+                else
+                    snprintf(b, sizeof(b), "%dHz", (int)(peakHz + 0.5f));
+                int16_t x1, y1;
+                uint16_t w, h;
+                display.getTextBounds(b, 1, 1, &x1, &y1, &w, &h);
+                display.setCursor(SCREEN_WIDTH - 1 - w, 9);
+                display.print(b);
+                // Downward marker over the peak bar (2px-wide bins, so column peak*2).
+                int mx = specPeakBin * 2;
+                display.drawLine(mx, 0, mx, 3, WHITE);
+            }
         }
-        if (showLabels)
-            ScopeDrawUnits(display, false);
         ScopeDrawOverlay(display);
         return;
     }
@@ -910,6 +926,8 @@ void ScopeEncoderButton(bool pressed) {
         unsigned long held = millis() - pressStartMs;
         if (held >= 800) {
             frozen = !frozen; // long press toggles freeze
+        } else if (!param_select && ScopeParamAt(param) == P_LABELS) {
+            showLabels = !showLabels; // on/off row: click flips it directly
         } else {
             param_select = param_select ? 0 : 1; // short click toggles edit
         }

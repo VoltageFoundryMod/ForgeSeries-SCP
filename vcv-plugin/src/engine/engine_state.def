@@ -43,6 +43,7 @@ CF_SCALAR(bool, _shotCapturing)
 CF_SCALAR(int,  _shotIdx)
 CF_SCALAR(int,  _capIdx)
 CF_SCALAR(int,  specPeakBin)
+CF_SCALAR(int,  specChan)
 
 // ── Engine clock (shim, fw_engine.cpp) — per-instance so N modules don't share ─
 CF_SCALAR(unsigned long, g_engineMicros)
