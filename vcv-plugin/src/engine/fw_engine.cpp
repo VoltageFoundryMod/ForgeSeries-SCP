@@ -6,11 +6,36 @@
 // of the plugin. State is made per-instance by the same context-swap technique
 // ClockForge uses (see engine_state.def + EngineScope below).
 
+// Every system header the shim and lib/ reach transitively must be included
+// out here, BEFORE the anonymous namespace below opens — otherwise std:: lands
+// inside it with internal linkage.
+#include <algorithm>
+#include <atomic>
+#include <cmath>
+#include <cstdarg>
+#include <cstdint>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <math.h>
+#include <mutex>
+#include <string>
+#include <utility> // std::swap
+#include <vector>
+
+// ── Translation-unit privacy ─────────────────────────────────────────────────
+// Several Forge modules link into a single VCV Rack plugin (see the
+// ForgeSeries-VCV meta-repo), and every module's firmware defines the same
+// global names — micros(), Serial, display, InitIO(), MENU_ITEMS, cal, ... —
+// each backed by its own divergent lib/. So the whole firmware, from the shim
+// down to the entry layer, lives in an anonymous namespace: internal linkage
+// means sibling modules neither collide at link time nor silently share one
+// COMDAT copy of a same-named class. The public fvengine:: API below stays
+// outside it, and is the only thing this TU exports.
+namespace {
+
 #include "../shim/Arduino.h"
 #include "../shim/Wire.h"
-
-#include <mutex>
-#include <utility> // std::swap
 
 // ── Shim symbol definitions ──────────────────────────────────────────────────
 HostBridge *g_host = nullptr;
@@ -46,6 +71,8 @@ void delayMicroseconds(unsigned long) {} // never block inside Rack
 // Shared, non-swapped scratch display (re-rendered every getFramebuffer under the
 // entry-point lock — safe to share across instances).
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
+
+} // namespace — end of the private firmware translation unit
 
 #include "fw_engine.hpp"
 
